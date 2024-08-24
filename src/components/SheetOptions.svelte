@@ -21,6 +21,7 @@
         oors: true,
         tempoMarks: false,
         oorMarks: false,
+        tokenize: true,
         bpmChanges: true,
         bpmType: 'detailed',
         minSpeedChange: 10,
@@ -147,6 +148,11 @@
     <label for='oormark-checkbox'>
         <input type='checkbox' id="oormark-checkbox" bind:checked={settings.oorMarks}>
         Show out of range (ctrl) text marks
+    </label>
+
+     <label for='tokenize-checkbox'>
+        <input type='checkbox' id="tokenize-checkbox" bind:checked={settings.tokenize}>
+        Standardize marks, comments & durations 
     </label>
 
     {#if settings.oors && settings.oorMarks}

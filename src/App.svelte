@@ -332,8 +332,12 @@
 
             if (difference != 0) {
                 // Add comment
-                let text = `Transpose by: ${-transposition > 0 ? '+' : ''}${-transposition}`
-                text += ` (${-difference > 0 ? '+' : ''}${-difference})`
+                if (settings.tokenize) {
+                 let text = `@TRANSPOSE ${-difference > 0 ? '+' : ''}${-difference}`
+                } else {
+                    let text = `Transpose by: ${-transposition > 0 ? '+' : ''}${-transposition}`
+                    text += ` (${-difference > 0 ? '+' : ''}${-difference})`
+                }
 
                 let non_comment_index = i-1
 
