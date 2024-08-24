@@ -334,7 +334,7 @@
                 // Add comment
                 if (settings.tokenize) {
                  let text = `@TRANSPOSE ${-difference > 0 ? '+' : ''}${-difference}`
-                else
+                } else {
                     let text = `Transpose by: ${-transposition > 0 ? '+' : ''}${-transposition}`
                     text += ` (${-difference > 0 ? '+' : ''}${-difference})`
                 }

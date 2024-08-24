@@ -394,8 +394,13 @@ function generateChords(events /* note_on, set_tempo and time_signature */, sett
                     nextTempo = element.tempo
                     nextBPM = element.tempoBPM
                     if (previousTempo == undefined) {
-                        if(settings.bpmChanges)
-                            chords.push({ type: 'comment', kind: 'tempo', text: `Tempo: ${Math.round(element.tempoBPM)} BPM` })
+                        if(settings.bpmChanges) {
+                            if (settings.tokenize) {
+                                chords.push({ type: 'comment', kind: 'tempo', text: `@TEMPO ${Math.round(element.tempoBPM)}` })
+                            } else {
+                                chords.push({ type: 'comment', kind: 'tempo', text: `Tempo: ${Math.round(element.tempoBPM)} BPM` })
+                            }
+                        }
                     }
                     else if (previousTempo != undefined && (previousTempo != element.tempo) && (previousBPM != element.tempoBPM)) {
                         if(settings.bpmChanges) {
