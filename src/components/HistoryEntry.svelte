@@ -8,6 +8,8 @@
   import { onMount } from "svelte";
 
   export let piece;
+  export let sheetSelectable = false;
+  export let sheetSelected = false;
 
   let title; // HTMLElement
 
@@ -19,7 +21,12 @@
   // onMount(wrapOnUnderlines)
 
   let load = () => {
-    dispatch("load", { project: piece });
+    if (sheetSelectable) {
+      sheetSelected = !sheetSelected;
+      dispatch("select", { selected: sheetSelected, project: piece });
+    } else {
+      dispatch("load", { project: piece });
+    }
   };
 
   let removalDialog;
@@ -61,10 +68,19 @@
 <button
   title={piece.name}
   on:click={load}
-  class="max-w-64 text-dimgrey justify-center align-middle text-nowrap text-ellipsis overflow-hidden"
-  style="background: none !important; border: 1px solid dimgrey"
+  class="max-w-64 text-dimgrey justify-center align-middle text-nowrap text-ellipsis overflow-hidden relative"
+  style="background: none !important; border: 1px solid dimgrey; {sheetSelected ? 'border-color: lightgreen' : ''}"
   on:contextmenu|preventDefault={remove}
 >
+  {#if sheetSelectable}
+    <div class="absolute top-1 left-1">
+      <input
+        type="checkbox"
+        bind:checked={sheetSelected}
+        class="pointer-events-none"
+      />
+    </div>
+  {/if}
   <div
     bind:this={title}
     style="white-space: nowrap; text-overflow: ellipsis; overflow: hidden"

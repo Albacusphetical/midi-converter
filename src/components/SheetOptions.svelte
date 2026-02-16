@@ -6,6 +6,7 @@
 
   export let show;
   export let hasMIDI = false;
+  export let hideTranspositionSettings = false;
 
   let fonts = [
     "Verdana",
@@ -66,46 +67,48 @@
     {/each}
   {/if}
 
-  <hr class="my-2 mx-1" />
+  {#if !hideTranspositionSettings}
+    <hr class="my-2 mx-1" />
 
-  <div
-    class="flex flex-col items-start align-middle"
-    style="margin-top: -0.7em"
-  >
-    <div class="flex flex-row mt-3">
-      <label
-        class="flex flex-row items-center"
-        title="Defines how much better a transposition should be than the previous transposition for multi-transpose to act (higher = less transposing)"
-        for="atleast">Resilience (?):</label
-      >
-      <input
-        class="w-32"
-        id="atleast"
-        type="range"
-        min="0"
-        max="12"
-        bind:value={settings.resilience}
-      />
-      <span style="display:flex; align-items: center"
-        >{settings.resilience}</span
-      >
+    <div
+      class="flex flex-col items-start align-middle"
+      style="margin-top: -0.7em"
+    >
+      <div class="flex flex-row mt-3">
+        <label
+          class="flex flex-row items-center"
+          title="Defines how much better a transposition should be than the previous transposition for multi-transpose to act (higher = less transposing)"
+          for="atleast">Resilience (?):</label
+        >
+        <input
+          class="w-32"
+          id="atleast"
+          type="range"
+          min="0"
+          max="12"
+          bind:value={settings.resilience}
+        />
+        <span style="display:flex; align-items: center"
+          >{settings.resilience}</span
+        >
+      </div>
+      <div class="flex flex-row mt-3">
+        <label
+          class="flex flex-row items-center"
+          title="Defines whether or not the transposed region(s) should be related to previous regions"
+          for="sticky-auto-transposition">Sticky auto-transposition (?):</label
+        >
+        <input
+          class="mx-1"
+          type="checkbox"
+          id="sticky-auto-transposition"
+          bind:checked={settings.stickyAutoTransposition}
+        />
+      </div>
     </div>
-    <div class="flex flex-row mt-3">
-      <label
-        class="flex flex-row items-center"
-        title="Defines whether or not the transposed region(s) should be related to previous regions"
-        for="sticky-auto-transposition">Sticky auto-transposition (?):</label
-      >
-      <input
-        class="mx-1"
-        type="checkbox"
-        id="sticky-auto-transposition"
-        bind:checked={settings.stickyAutoTransposition}
-      />
-    </div>
-  </div>
 
-  <hr class="my-2 mx-1" />
+    <hr class="my-2 mx-1" />
+  {/if}
 
   <div>
     <!-- {#if hasMIDI} -->

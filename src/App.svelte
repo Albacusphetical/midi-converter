@@ -52,6 +52,10 @@
   import SheetActions from "./components/SheetActions.svelte";
   import Guide from "./components/Guide.svelte";
   import ChordEditor from "./components/ChordEditor.svelte";
+  import HistoryCombineDialog from "./components/HistoryCombineDialog.svelte";
+  import HistoryList from "./components/HistoryList.svelte";
+  import { handleHistoryCombineCommand as handleHistoryCombineCommandUtils } from "./utils/HistoryCombine.js";
+  import { setGlobalContext } from "./utils/GlobalContext.js";
 
   let existingProject = {
     element: undefined,
@@ -138,10 +142,47 @@
     }, 20);
   }
 
+  // --- Global Context Initialization ---
+  const context = {
+    get importer() {
+      return importer;
+    },
+    setIsHistoryMultiSelect: (v) => (isHistoryMultiSelect = v),
+    setSheetReady: (v) => (sheetReady = v),
+    getSettings: () => settings,
+    updateSettings: (updates) => (settings = { ...settings, ...updates }),
+    getSelectedSheets: () => selectedSheets,
+    setSelectedSheets: (v) => (selectedSheets = v),
+    get HistoryCombineDialogComp() {
+      return HistoryCombineDialogComp;
+    },
+    getContainer: () => container,
+    getChordsAndOtherwise: () => chords_and_otherwise,
+    setChordsAndOtherwise: (v) => (chords_and_otherwise = v),
+    getFilename: () => filename,
+    setFilename: (v) => (filename = v),
+    getSheetReady: () => sheetReady,
+    copyCapturedImage,
+    downloadCapturedImage,
+  };
+  setGlobalContext(context);
+  // -------------------------------------
+
   let MIDIObject;
   let tracks;
 
   let chords_and_otherwise;
+
+  let isHistoryMultiSelect = false;
+  let selectedSheets = [];
+  let HistoryCombineDialogComp; // will be bound to HistoryCombineDialog component
+
+  /**
+   * Helper for the HistoryCombine utility to load a sheet and wait for layout.
+   */
+  async function handleHistoryCombineCommand(e) {
+    await handleHistoryCombineCommandUtils(e);
+  }
 
   let container;
 
@@ -851,8 +892,8 @@
     }
   }
 
-  function downloadCapturedImage(blob) {
-    download(blob, "png");
+  function downloadCapturedImage(blob, name = undefined) {
+    download(blob, "png", name);
   }
 
   function downloadSheetData(piece) {
@@ -861,10 +902,10 @@
     download(blob, "json");
   }
 
-  function download(blob, extension) {
+  function download(blob, extension, name = undefined) {
     const url = URL.createObjectURL(blob);
 
-    let output = `${filename}.${extension}`;
+    let output = `${name ?? filename}.${extension}`;
 
     // create a temporary element to download the data
     let linkEl = document.createElement("a");
@@ -1336,10 +1377,7 @@
       on:drop|preventDefault={droppedFile}
       on:dragover|preventDefault
       for="drop"
-      class="cursor-pointer
-                                 rounded-xl
-                                 text-xl
-                                 p-4"
+      class="cursor-pointer rounded-xl text-xl p-4"
       style="border: 2px solid dimgrey"
     >
       Click or drop a MIDI/JSON file here!
@@ -1356,34 +1394,53 @@
 
   {#if pieces.length > 0}
     <!-- Has piece(s) in history? -->
+    <button
+      disabled={pieces.length < 2}
+      class="p-2 border border-white rounded hover:bg-white hover:text-black transition-colors"
+      on:click={() => {
+        isHistoryMultiSelect = !isHistoryMultiSelect;
+        if (!isHistoryMultiSelect) {
+          selectedSheets = [];
+          HistoryCombineDialogComp.resetSettings();
+        }
+      }}
+    >
+      {isHistoryMultiSelect ? "Cancel Selection" : "Combine"}
+    </button>
     <hr class="w-[58em]" style="border: 1px solid #a0a0a0" />
 
     <div class="flex flex-col items-center gap-6">
-      {#if pieces.length == 1 && pieces[0].name.endsWith("(sample)")}
-        <p class="text-white text-3xl">Or, try this sample piece:</p>
-      {:else}
-        <p class="text-white text-3xl">
-          Or, continue one of your previous projects:
-        </p>
-      {/if}
-      <div
-        class="w-3/4 flex flex-wrap justify-center gap-2 overflow-clip text-ellipsis"
-      >
-        {#each pieces as piece}
-          <HistoryEntry
-            {piece}
-            on:load={(x) => {
-              existingProject.setAndProceed(x.detail.project);
-              importer.hide();
-            }}
-            on:refresh={() => {
-              pieces = history.getAll();
-              remaining = remainingSize();
-            }}
-            on:export={() => downloadSheetData(piece)}
-          />
-        {/each}
+      <div class="flex flex-row gap-4 items-center">
+        {#if pieces.length == 1 && pieces[0].name.endsWith("(sample)")}
+          <p class="text-white text-3xl">Or, try this sample piece:</p>
+        {:else}
+          <p class="text-white text-3xl">
+            Or, continue one of your previous projects:
+          </p>
+        {/if}
       </div>
+
+      <HistoryCombineDialog
+        {settings}
+        bind:selectedSheets
+        bind:this={HistoryCombineDialogComp}
+        on:command={handleHistoryCombineCommand}
+      />
+
+      <HistoryList
+        {pieces}
+        selectable={isHistoryMultiSelect}
+        bind:selectedSheets
+        on:load={(e) => {
+          existingProject.setAndProceed(e.detail.project);
+          importer.hide();
+        }}
+        on:refresh={() => {
+          pieces = history.getAll();
+          remaining = remainingSize();
+        }}
+        on:export={(e) => downloadSheetData(e.detail.project)}
+      />
     </div>
 
     <div>
@@ -1600,7 +1657,7 @@ Individual sizes are an estimation, the total is correct.">ⓘ</span
               {#if inner.type === "break" && next_thing.type != "comment" && previous_thing?.type != "comment"}
                 <br data-index={index} class="sheet-item" />
               {:else if inner.type === "comment"}
-                {#if previous_thing?.type != "comment" && inner.notop != true && inner.kind != "inline"}
+                {#if index > 0 && previous_thing?.type != "comment" && inner.notop != true && inner.kind != "inline"}
                   <br data-index={index} class="sheet-item" />
                 {/if}
                 {#if ["custom", "tempo", "inline", "title"].includes(inner.kind)}
