@@ -1,4 +1,5 @@
 <script>
+  import { tick } from "svelte";
   import { domToBlob } from "modern-screenshot";
   import {
     getMIDIFileFromArrayBuffer,
@@ -165,6 +166,10 @@
     getFilename: () => filename,
     setFilename: (v) => (filename = v),
     getSheetReady: () => sheetReady,
+    addToast,
+    softRegen,
+    tick,
+    setForcedNextSheetStartTime: (v) => (forcedNextSheetStartTime = v),
     copyCapturedImage,
     downloadCapturedImage,
   };
@@ -178,6 +183,7 @@
 
   let isHistoryMultiSelect = false;
   let selectedSheets = [];
+  let forcedNextSheetStartTime = undefined;
   let HistoryCombineDialogComp; // will be bound to HistoryCombineDialog component
 
   /**
@@ -334,10 +340,25 @@
           not_chord,
           real_index_of(chord.index + 1),
         );
-        if (!next_valid_chord) next_valid_chord = chord;
-        new_chord.next = {
-          notes: [{ playTime: next_valid_chord.notes[0].playTime }],
-        };
+
+        if (!next_valid_chord) {
+          if (forcedNextSheetStartTime !== undefined) {
+            // adjusts timing between for each combined sheet (except the last)
+            new_chord.next = {
+              notes: [{ playTime: forcedNextSheetStartTime }],
+            };
+          } else {
+            // original behavior
+            next_valid_chord = chord;
+            new_chord.next = {
+              notes: [{ playTime: next_valid_chord.notes[0].playTime }],
+            };
+          }
+        } else {
+          new_chord.next = {
+            notes: [{ playTime: next_valid_chord.notes[0].playTime }],
+          };
+        }
         if ("reflow" in chord) new_chord.reflow = chord.reflow;
 
         // new_note = new_note.sort((a, b) => a.displayValue - b.displayValue);
@@ -1438,8 +1459,8 @@
       </div>
 
       <HistoryCombineDialog
-        {settings}
-        bind:selectedSheets
+        appSettings={settings}
+        bind:combineSelection={selectedSheets}
         bind:this={HistoryCombineDialogComp}
         on:command={handleHistoryCombineCommand}
       />
@@ -1716,7 +1737,14 @@
                 {/if}
                 {#if inner.kind != "inline"}
                   <!-- and is any comment, break after -->
-                  <br data-index={index} class="sheet-item" />
+                  <br
+                    data-index={index}
+                    class="sheet-item"
+                    style={settings.capturingImage &&
+                    index === chords_and_otherwise.length - 1
+                      ? "display:none"
+                      : ""}
+                  />
                 {/if}
               {/if}
             {:else}

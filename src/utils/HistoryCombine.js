@@ -96,6 +96,52 @@ export function reindexTransposes(data, globalIndex, lastTransposeValue) {
 }
 
 /**
+ * Finds the playtime of the first available note in the sheet data.
+ */
+function getFirstNotePlayTime(data) {
+  const firstChord = data.find(is_chord);
+  return firstChord?.notes?.[0]?.playTime;
+}
+
+/**
+ * Removes leading and trailing breaks from the sheet data to eliminate extra vertical space.
+ * Also strips breaks that are redundant because they sit next to a transpose comment at the start/end.
+ */
+function stripLeadingAndTrailingBreaks(data) {
+  let result = [...data];
+
+  // Strip leading breaks
+  while (result.length > 0 && result[0].type === "break") {
+    result.shift();
+  }
+
+  // Strip trailing breaks
+  while (result.length > 0 && result[result.length - 1].type === "break") {
+    result.pop();
+  }
+
+  return result;
+}
+
+/**
+ * Merges consecutive breaks in the data to avoid double spacing.
+ */
+function mergeConsecutiveBreaks(data) {
+  const stripped = stripLeadingAndTrailingBreaks(data);
+  const result = [];
+  for (let i = 0; i < stripped.length; i++) {
+    const item = stripped[i];
+    if (item.type === "break" && result[result.length - 1]?.type === "break") {
+      continue; // Skip consecutive breaks
+    }
+    result.push(item);
+  }
+  return result;
+}
+
+
+
+/**
  * Iterates through sheets, loads them into the DOM via callback, and captures snapshots.
  */
 export async function generateCombinedImage({ selectedSheets, loadSheet }) {
@@ -103,27 +149,49 @@ export async function generateCombinedImage({ selectedSheets, loadSheet }) {
   let globalTransposeIndex = 1;
   let lastTransposeValue = undefined;
 
-  for (let sheet of selectedSheets) {
-    const rawData = decompress(sheet.data);
-    const { data, nextIndex, nextLastValue } = reindexTransposes(
-      rawData,
+  for (let i = 0; i < selectedSheets.length; i++) {
+    const sheet = selectedSheets[i];
+    let data = decompress(sheet.data);
+
+    // Look ahead to the next sheet for timing continuity
+    let nextStart = undefined;
+    if (i < selectedSheets.length - 1) {
+      const nextData = decompress(selectedSheets[i + 1].data);
+      nextStart = getFirstNotePlayTime(nextData);
+    }
+
+    const { data: reindexedData, nextIndex, nextLastValue } = reindexTransposes(
+      data,
       globalTransposeIndex,
       lastTransposeValue,
     );
     globalTransposeIndex = nextIndex;
     lastTransposeValue = nextLastValue;
 
+    // Strip leading/trailing breaks and merge consecutive ones
+    const strippedData = mergeConsecutiveBreaks(reindexedData);
+
     // Trigger UI load in parent
-    const target = await loadSheet(sheet.name, data);
+    const target = await loadSheet(sheet.name, strippedData);
+
+    // Apply temporary generation settings (ordering, quantization) via softRegen
+    const ctx = getGlobalContext();
+    ctx.setForcedNextSheetStartTime(nextStart);
+    ctx.softRegen();
+
+    // Wait for Svelte to finish updating the DOM with the generation settings
+    await ctx.tick();
 
     // Precise capture logic
     target.style.height = "max-content";
     target.style.width = "max-content";
+    target.style.whiteSpace = "nowrap";
     void target.offsetHeight;
 
     const rect = target.getBoundingClientRect();
     const w = rect.width;
-    const h = rect.height + 20; // + a bit of space to prevent overlapping between two images
+    const padding = i === selectedSheets.length - 1 ? 15 : 0; // add some padding bottom of the final image
+    const h = rect.height + padding;
 
     let options = {
       scale: 2,
@@ -172,17 +240,37 @@ export async function generateCombinedText({ selectedSheets, loadSheet }) {
   let globalTransposeIndex = 1;
   let lastTransposeValue = undefined;
 
-  for (let sheet of selectedSheets) {
-    const rawData = decompress(sheet.data);
-    const { data, nextIndex, nextLastValue } = reindexTransposes(
-      rawData,
+  for (let i = 0; i < selectedSheets.length; i++) {
+    const sheet = selectedSheets[i];
+    let data = decompress(sheet.data);
+
+    // Look ahead to the next sheet for timing continuity
+    let nextStart = undefined;
+    if (i < selectedSheets.length - 1) {
+      const nextData = decompress(selectedSheets[i + 1].data);
+      nextStart = getFirstNotePlayTime(nextData);
+    }
+
+    const { data: reindexedData, nextIndex, nextLastValue } = reindexTransposes(
+      data,
       globalTransposeIndex,
       lastTransposeValue,
     );
     globalTransposeIndex = nextIndex;
     lastTransposeValue = nextLastValue;
 
-    const target = await loadSheet(sheet.name, data, 400);
+    // Strip leading/trailing breaks and merge consecutive ones
+    const strippedData = mergeConsecutiveBreaks(reindexedData);
+
+    const target = await loadSheet(sheet.name, strippedData, 400);
+
+    // Apply temporary generation settings (ordering, quantization) via softRegen
+    const ctx = getGlobalContext();
+    ctx.setForcedNextSheetStartTime(nextStart);
+    ctx.softRegen();
+
+    await ctx.tick();
+
     let text = target.innerText;
 
     // Clean up redundant indices
@@ -245,6 +333,7 @@ export async function handleHistoryCombineCommand(e) {
     }
 
     if (type === "image") {
+      ctx.addToast("Generating combined image...", "info");
       ctx.importer.hide();
       ctx.setIsHistoryMultiSelect(false);
       ctx.setSheetReady(true);
@@ -266,6 +355,7 @@ export async function handleHistoryCombineCommand(e) {
         }
       }
     } else if (type === "text") {
+      ctx.addToast("Generating combined text...", "info");
       ctx.importer.hide();
       ctx.setIsHistoryMultiSelect(false);
       ctx.setSheetReady(true);
@@ -282,20 +372,26 @@ export async function handleHistoryCombineCommand(e) {
       navigator.clipboard.writeText(text);
       ctx.updateSettings({ oorMarks: currSettings.oorMarks, tempoMarks: currSettings.tempoMarks })
 
-      alert("Combined text copied to clipboard!");
+      ctx.addToast("Combined text copied to clipboard!", "success");
     } else if (type === "transposes") {
+      ctx.addToast("Copying transposes...", "info");
       const text = generateCombinedTransposes(ctx.getSelectedSheets());
-      navigator.clipboard.writeText(text);
-      alert("Transposes copied to clipboard!");
+      if (text) {
+        navigator.clipboard.writeText(text);
+        ctx.addToast("Transposes copied to clipboard!", "success");
+      } else {
+        ctx.addToast("No transposes found in selected sheets", "warning");
+      }
     }
   } catch (err) {
     console.error("Combining failed", err);
-    alert("Combining failed: " + err.message);
+    ctx.addToast("Combining failed: " + err.message, "warning");
   } finally {
     ctx.setChordsAndOtherwise(originalData);
     ctx.setFilename(originalFilename);
     ctx.setSheetReady(originalSheetReady);
     ctx.updateSettings(originalSettings);
+    ctx.setForcedNextSheetStartTime(undefined);
 
     if (!originalSheetReady) ctx.importer.show();
     ctx.setIsHistoryMultiSelect(true);

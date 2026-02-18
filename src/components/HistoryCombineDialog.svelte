@@ -4,28 +4,36 @@
 
   const dispatch = createEventDispatcher();
 
-  export let selectedSheets = [];
-  export let settings = {}; // Current app settings to initialize defaults
+  export let combineSelection = [];
+  export let appSettings = {};
 
   let historyCombineDialog;
   let busy = false;
   let tempSettings = {};
 
-  // Initialize tempSettings when settings prop changes or on mount
-  $: if (settings && Object.keys(tempSettings).length === 0) {
-    tempSettings = { ...settings };
+  // Initialize tempSettings from appSettings if not yet set
+  $: if (appSettings && Object.keys(tempSettings).length === 0) {
+    tempSettings = { ...appSettings };
+  }
+
+  export function setBusy(val) {
+    busy = val;
+  }
+
+  export function resetSettings() {
+    tempSettings = { ...appSettings };
   }
 
   function move(index, direction) {
     if (busy) return;
-    const newItems = [...selectedSheets];
+    const newItems = [...combineSelection];
     const targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= newItems.length) return;
 
     const temp = newItems[index];
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
-    selectedSheets = newItems;
+    combineSelection = newItems;
   }
 
   export function showModal() {
@@ -37,15 +45,15 @@
   }
 </script>
 
-{#if selectedSheets.length > 0}
+{#if combineSelection.length > 0}
   <div
     class="flex flex-col items-center gap-2 p-4 border border-gray-600 rounded-lg bg-gray-800"
   >
     <h3 class="text-xl text-white">
-      Selected Sheets ({selectedSheets.length})
+      Selected Sheets ({combineSelection.length})
     </h3>
     <div class="flex flex-col gap-1 w-full relative">
-      {#each selectedSheets as sheet, i (sheet.name)}
+      {#each combineSelection as sheet, i (sheet.name)}
         <div
           class="flex items-center justify-between text-white p-2 bg-gray-700 rounded gap-2"
         >
@@ -60,7 +68,7 @@
             </button>
             <button
               class="px-2 py-0.5 bg-gray-600 rounded hover:bg-gray-500 disabled:opacity-50"
-              disabled={i === selectedSheets.length - 1 || busy}
+              disabled={i === combineSelection.length - 1 || busy}
               on:click={() => move(i, 1)}
             >
               ↓
@@ -71,10 +79,10 @@
     </div>
     <button
       class="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-50"
-      disabled={selectedSheets.length < 2 || busy}
+      disabled={combineSelection.length < 2 || busy}
       on:click={() => showModal()}
     >
-      Combine {selectedSheets.length} Sheets...
+      Combine {combineSelection.length} Sheets...
     </button>
   </div>
 {/if}
@@ -147,7 +155,8 @@
       <button
         disabled={busy}
         class="w-full p-2 bg-gray-600 rounded hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        on:click={() => dispatch("command", { type: "transposes" })}
+        on:click={() =>
+          dispatch("command", { type: "transposes", tempSettings })}
       >
         Copy Transposes
       </button>
