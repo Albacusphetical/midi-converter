@@ -1434,7 +1434,9 @@
     <!-- Has piece(s) in history? -->
     <button
       disabled={pieces.length < 2}
-      class="p-2 border border-white rounded hover:bg-white hover:text-black transition-colors"
+      class="p-2 border rounded transition-colors {isHistoryMultiSelect
+        ? 'text-white border-white'
+        : ''}"
       on:click={() => {
         isHistoryMultiSelect = !isHistoryMultiSelect;
         if (!isHistoryMultiSelect) {
