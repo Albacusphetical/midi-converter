@@ -59,12 +59,19 @@
     <h3 class="text-xl text-white">
       Selected Sheets ({combineSelection.length})
     </h3>
-    <div class="flex flex-col gap-1 w-full relative">
+    <div
+      class="flex flex-col gap-1 w-full relative max-h-[200px] min-w-[200px] max-w-[400px] overflow-y-auto"
+    >
       {#each combineSelection as sheet, i (i)}
         <div
           class="flex items-center justify-between text-white p-2 bg-gray-700 rounded gap-2"
         >
-          <span>{sheet.name}</span>
+          <div class="flex items-center gap-2 overflow-hidden">
+            <span class="text-gray-400 text-xs tabular-nums">{i + 1}.</span>
+            <span class="truncate max-w-[400px]" title={sheet.name}>
+              {sheet.name}
+            </span>
+          </div>
           <div class="flex gap-1">
             <button
               class="px-2 py-0.5 bg-gray-600 rounded hover:bg-gray-500 disabled:opacity-50"

@@ -144,12 +144,13 @@ function mergeConsecutiveBreaks(data) {
 /**
  * Iterates through sheets, loads them into the DOM via callback, and captures snapshots.
  */
-export async function generateCombinedImage({ selectedSheets, loadSheet }) {
+export async function generateCombinedImage({ selectedSheets, loadSheet, onProgress }) {
   let captures = [];
   let globalTransposeIndex = 1;
   let lastTransposeValue = undefined;
 
   for (let i = 0; i < selectedSheets.length; i++) {
+    if (onProgress) onProgress(i + 1, selectedSheets.length);
     const sheet = selectedSheets[i];
     let data = decompress(sheet.data);
 
@@ -235,12 +236,13 @@ export async function generateCombinedImage({ selectedSheets, loadSheet }) {
 /**
  * Generates combined text content from multiple sheets.
  */
-export async function generateCombinedText({ selectedSheets, loadSheet }) {
+export async function generateCombinedText({ selectedSheets, loadSheet, onProgress }) {
   let combinedText = "";
   let globalTransposeIndex = 1;
   let lastTransposeValue = undefined;
 
   for (let i = 0; i < selectedSheets.length; i++) {
+    if (onProgress) onProgress(i + 1, selectedSheets.length);
     const sheet = selectedSheets[i];
     let data = decompress(sheet.data);
 
@@ -364,6 +366,9 @@ export async function handleHistoryCombineCommand(e) {
         settings: ctx.getSettings(),
         loadSheet: (name, data) =>
           loadSheetForHistoryCombine(name, data),
+        onProgress: (current, total) => {
+          ctx.addToast(`Generating combined image (${current} / ${total})...`, "info");
+        }
       });
 
       if (blob) {
@@ -387,6 +392,9 @@ export async function handleHistoryCombineCommand(e) {
         selectedSheets: ctx.getSelectedSheets(),
         loadSheet: (name, data, waitTime) =>
           loadSheetForHistoryCombine(name, data, waitTime),
+        onProgress: (current, total) => {
+          ctx.addToast(`Generating combined text (${current} / ${total})...`, "info");
+        }
       });
 
       navigator.clipboard.writeText(text);

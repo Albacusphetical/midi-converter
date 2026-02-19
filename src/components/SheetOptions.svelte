@@ -26,7 +26,7 @@
     <hr class="my-2 mx-1" />
 
     {#each settings.tracks as track, idx}
-      <label for="trackbox{idx + 1}">
+      <label for="trackbox{idx + 1}" class="track-label">
         <input
           id="trackbox{idx + 1}"
           type="checkbox"
@@ -37,8 +37,11 @@
             settings.tracks = settings.tracks.map((track) => ({ ...track }));
           }}
         />
-        Track {idx + 1} - {track.name}
-        {track.instrument ? `(${track.instrument}) ` : ""}- {track.length} events
+        <span>
+          Track {idx + 1} - {track.name}
+          {track.instrument ? `(${track.instrument}) ` : ""}- {track.length}
+          events
+        </span>
       </label>
     {/each}
   {/if}
@@ -198,7 +201,7 @@
       </div>
     {/if}
 
-    <label for="classic-chord-order">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="classic-chord-order"
@@ -207,7 +210,7 @@
       Classic chord order
     </label>
 
-    <label for="order-quantizes">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="order-quantizes"
@@ -221,7 +224,7 @@
       </span>
     </label>
 
-    <label for="curly-quantizes">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="curly-quantizes"
@@ -230,14 +233,14 @@
       Curly braces for quantized chords
     </label>
 
-    <label for="out-of-range">
+    <label class="checkbox-label">
       <input type="checkbox" id="out-of-range" bind:checked={settings.oors} />
       Include out of range (ctrl) notes
     </label>
 
     <hr class="my-2 mx-1" />
 
-    <label for="tempo-checkbox">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="tempo-checkbox"
@@ -246,7 +249,7 @@
       Show tempo/timing marks
     </label>
 
-    <label for="oormark-checkbox">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="oormark-checkbox"
@@ -301,7 +304,7 @@
     <hr class="my-2 mx-1" />
 
     {#if hasMIDI && !settings.missingTempo}
-      <label for="bpm-changes">
+      <label for="bpm-changes" class="checkbox-label">
         <input
           type="checkbox"
           id="bpm-changes"
@@ -375,6 +378,20 @@
     label {
       max-width: fit-content;
       text-align: center;
+      user-select: none;
+    }
+
+    label:hover {
+      color: lightgray;
+    }
+
+    .track-label,
+    .checkbox-label {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.4em;
+      margin-bottom: 0.2em;
     }
 
     .select-div {
