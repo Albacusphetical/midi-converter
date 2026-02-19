@@ -36,6 +36,13 @@
     combineSelection = newItems;
   }
 
+  function remove(index) {
+    if (busy) return;
+    const newItems = [...combineSelection];
+    newItems.splice(index, 1);
+    combineSelection = newItems;
+  }
+
   export function showModal() {
     historyCombineDialog.showModal();
   }
@@ -53,7 +60,7 @@
       Selected Sheets ({combineSelection.length})
     </h3>
     <div class="flex flex-col gap-1 w-full relative">
-      {#each combineSelection as sheet, i (sheet.name)}
+      {#each combineSelection as sheet, i (i)}
         <div
           class="flex items-center justify-between text-white p-2 bg-gray-700 rounded gap-2"
         >
@@ -72,6 +79,13 @@
               on:click={() => move(i, 1)}
             >
               ↓
+            </button>
+            <button
+              class="px-2 py-0.5 bg-red-600 rounded hover:bg-red-500 disabled:opacity-50"
+              disabled={busy}
+              on:click={() => remove(i)}
+            >
+              ✕
             </button>
           </div>
         </div>

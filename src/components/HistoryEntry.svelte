@@ -22,8 +22,7 @@
 
   let load = () => {
     if (sheetSelectable) {
-      sheetSelected = !sheetSelected;
-      dispatch("select", { selected: sheetSelected, project: piece });
+      dispatch("select", { selected: true, project: piece });
     } else {
       dispatch("load", { project: piece });
     }
@@ -69,16 +68,15 @@
   title={piece.name}
   on:click={load}
   class="max-w-64 text-dimgrey justify-center align-middle text-nowrap text-ellipsis overflow-hidden relative"
-  style="background: none !important; border: 1px solid dimgrey; {sheetSelected ? 'border-color: lightgreen' : ''}"
+  style="background: none !important; border: 1px solid dimgrey; {sheetSelected
+    ? 'border-color: lightgreen'
+    : ''}"
   on:contextmenu|preventDefault={remove}
 >
-  {#if sheetSelectable}
+  {#if sheetSelectable && sheetSelected}
     <div class="absolute top-1 left-1">
-      <input
-        type="checkbox"
-        bind:checked={sheetSelected}
-        class="pointer-events-none"
-      />
+      <!-- Checked indicator (visual only) -->
+      <div class="w-2 h-2 bg-green-500 rounded-full"></div>
     </div>
   {/if}
   <div

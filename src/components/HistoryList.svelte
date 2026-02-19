@@ -10,11 +10,7 @@
 
   function handleSelect(piece, selected) {
     if (selected) {
-      if (!selectedSheets.some((p) => p.name === piece.name)) {
-        selectedSheets = [...selectedSheets, piece];
-      }
-    } else {
-      selectedSheets = selectedSheets.filter((p) => p.name !== piece.name);
+      selectedSheets = [...selectedSheets, piece];
     }
     dispatch("selectChange", { selectedSheets });
   }
