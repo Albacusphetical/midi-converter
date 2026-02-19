@@ -286,9 +286,27 @@ export async function generateCombinedText({ selectedSheets, loadSheet }) {
  */
 export function generateCombinedTransposes(selectedSheets) {
   let allTransposes = [];
-  selectedSheets.forEach((sheet) => {
+  let globalTransposeIndex = 1;
+  let lastTransposeValue = undefined;
+
+  for (let i = 0; i < selectedSheets.length; i++) {
+    const sheet = selectedSheets[i];
     let data = decompress(sheet.data);
-    let transposes = data.filter((e) => e.kind === "transpose");
+
+    // Reuse reindexTransposes to handle:
+    // 1. Injecting missing transpose comments (e.g. for split sheets)
+    // 2. Filtering out consecutive duplicate values
+    const { data: reindexedData, nextIndex, nextLastValue } = reindexTransposes(
+      data,
+      globalTransposeIndex,
+      lastTransposeValue,
+    );
+
+    globalTransposeIndex = nextIndex;
+    lastTransposeValue = nextLastValue;
+
+    const transposes = reindexedData.filter((item) => item.kind === "transpose");
+
     let transposesText = transposes
       .map((e) => {
         const match = e.text.match(/Transpose by:\s(\+?(-?\d+))/);
@@ -296,8 +314,10 @@ export function generateCombinedTransposes(selectedSheets) {
       })
       .filter((x) => x)
       .join(" ");
+
     if (transposesText) allTransposes.push(transposesText);
-  });
+  }
+
   return allTransposes.join(" ");
 }
 
