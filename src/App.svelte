@@ -1192,19 +1192,45 @@
       }
     });
 
-    history.add(newName, settings, items).then(() => {
-      pieces = history.getAll((remaining = remainingSize()));
-      // Open in new tab
-      const url = new URL(window.location.href);
-      url.searchParams.set("open", newName);
+    history
+      .add(newName, settings, items, false, { noAutoDelete: true })
+      .then(() => {
+        pieces = history.getAll((remaining = remainingSize()));
+        // Open in new tab
+        const url = new URL(window.location.href);
+        url.searchParams.set("open", newName);
 
-      if (newWindow) {
-        newWindow.location.href = url.toString();
-      } else {
-        // Fallback if window failed to open (rare if triggered by click)
-        window.open(url.toString(), "_blank");
-      }
-    });
+        if (newWindow) {
+          newWindow.location.href = url.toString();
+        } else {
+          // Fallback if window failed to open (rare if triggered by click)
+          window.open(url.toString(), "_blank");
+        }
+      })
+      .catch((e) => {
+        if (newWindow) newWindow.close();
+
+        const errorMsg = e.message || "";
+        const isQuotaError =
+          e.name === "QuotaExceededError" ||
+          e.code === 22 ||
+          e.code === 1014 ||
+          errorMsg.includes("QuotaExceededError") ||
+          errorMsg.includes("The quota has been exceeded.") ||
+          errorMsg.includes("NS_ERROR_DOM_QUOTA_REACHED");
+
+        if (isQuotaError) {
+          if (
+            confirm("Storage is full, unable to save. Open in current window?")
+          ) {
+            filename = newName;
+            chords_and_otherwise = items;
+            softRegen();
+          }
+        } else {
+          addToast("Failed to split sheet: " + errorMsg, "error");
+        }
+      });
   }
 
   function joinRegion(left, right) {

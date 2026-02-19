@@ -43,7 +43,7 @@ const module = {
     return pieces;
   },
 
-  add: async (name, settings, json, skip_compression = false) => {
+  add: async (name, settings, json, skip_compression = false, opts = {}) => {
     let pieces = module.getAll();
 
     let thisPieceRemoved = pieces.filter((entry) => entry.name != name);
@@ -54,11 +54,17 @@ const module = {
     try {
       localStorage.setItem(_key, JSON.stringify(thisPieceRemoved));
       addToast("Saved!", "success");
-    } catch ({ error, message }) {
-      if (
-        error == "QuotaExceededError" ||
-        message == "The quota has been exceeded."
-      ) {
+    } catch (e) {
+      const errorMsg = e.message || "";
+      const isQuotaError =
+        e.name === "QuotaExceededError" ||
+        e.code === 22 ||
+        e.code === 1014 ||
+        errorMsg.includes("QuotaExceededError") ||
+        errorMsg.includes("The quota has been exceeded.") ||
+        errorMsg.includes("NS_ERROR_DOM_QUOTA_REACHED");
+
+      if (isQuotaError && !opts.noAutoDelete) {
         const dropped = thisPieceRemoved.pop();
         console.log("Quota exceeded, dropping: ", dropped);
         thisPieceRemoved.shift(); // undo addition
@@ -72,9 +78,11 @@ const module = {
 
         module.add(name, settings, json, skip_compression);
       } else {
-        console.error(error, message);
-        addToast("Failed to save due to storage limits!", "error");
-        throw new Error(message || "QuotaExceededError");
+        console.error(e);
+        if (!isQuotaError) {
+          addToast("Failed to save due to storage limits!", "error");
+        }
+        throw e;
       }
     }
   },
