@@ -66,17 +66,19 @@
 
 {#if combineSelection.length > 0}
   <div
-    class="flex flex-col items-center gap-2 p-4 border border-gray-600 rounded-lg bg-gray-800"
+    class="flex flex-col items-center gap-2 p-4 border rounded-lg"
+    style="border: 1px solid dimgrey"
   >
     <h3 class="text-xl text-white">
-      Selected Sheets ({combineSelection.length})
+      Selected sheets ({combineSelection.length})
     </h3>
     <div
       class="flex flex-col gap-1 w-full relative max-h-[200px] min-w-[200px] max-w-[400px] overflow-y-auto"
     >
       {#each combineSelection as sheet, i (i)}
         <div
-          class="flex items-center justify-between text-white p-2 bg-gray-700 rounded gap-2"
+          class="flex items-center justify-between text-white p-2 border rounded gap-2"
+          style="border: 1px solid dimgrey"
         >
           <div class="flex items-center gap-2 overflow-hidden">
             <span class="text-gray-400 text-xs tabular-nums">{i + 1}.</span>
@@ -111,11 +113,11 @@
       {/each}
     </div>
     <button
-      class="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-50"
+      class="mt-2 !px-4 !py-2 bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-50"
       disabled={combineSelection.length < 2 || busy}
       on:click={() => showModal()}
     >
-      Combine {combineSelection.length} Sheets...
+      Combine {combineSelection.length} sheets
     </button>
   </div>
 {/if}
@@ -128,20 +130,23 @@
     else historyCombineDialog.close();
   }}
   on:close|preventDefault={() => {}}
-  class="rounded-lg bg-gray-800 text-white p-6 border border-gray-600 outline-none max-h-[90vh] overflow-y-auto"
+  class="rounded-lg text-white p-6 border outline-none max-h-[90vh] overflow-y-auto"
+  style="background-color: #242424; border: 1px solid dimgrey"
 >
   <div class="flex flex-col gap-4 min-w-[350px]">
-    <h2 class="text-xl font-bold text-center mb-2">Combine Sheets</h2>
+    <h2 class="text-xl font-bold text-center mb-2">Combine sheets</h2>
 
     <details
-      class="bg-gray-700 rounded-lg overflow-hidden border border-gray-600"
+      class="rounded-lg overflow-hidden border"
+      style="background-color: #3a3a3a; border: 1px solid dimgrey"
     >
       <summary
-        class="p-3 cursor-pointer hover:bg-gray-600 font-semibold select-none"
+        class="p-3 cursor-pointer hover:bg-neutral-700 font-semibold select-none"
+        style="background-color: #2a2a2a"
       >
         Generation Settings
       </summary>
-      <div class="p-3 bg-gray-800 text-sm">
+      <div class="p-3 text-sm" style="background-color: #292929">
         <SheetOptions
           bind:settings={tempSettings}
           show={true}
@@ -184,7 +189,7 @@
       </div>
     </div>
 
-    <hr class="border-gray-600" />
+    <hr style="border: 1px solid dimgrey" />
 
     <div class="flex flex-col gap-2">
       <h3 class="font-semibold text-gray-300">Text Data</h3>

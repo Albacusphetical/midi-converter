@@ -69,14 +69,14 @@
   on:click={load}
   class="max-w-64 text-dimgrey justify-center align-middle text-nowrap text-ellipsis overflow-hidden relative"
   style="background: none !important; border: 1px solid dimgrey; {sheetSelected
-    ? 'border-color: lightgreen'
+    ? 'border-color: #ff966d'
     : ''}"
   on:contextmenu|preventDefault={remove}
 >
   {#if sheetSelectable && sheetSelected}
     <div class="absolute top-1 left-1">
       <!-- Checked indicator (visual only) -->
-      <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+      <div class="w-2 h-2 rounded-full" style="background-color: #ff966d"></div>
     </div>
   {/if}
   <div

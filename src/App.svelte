@@ -1470,21 +1470,6 @@
 
   {#if pieces.length > 0}
     <!-- Has piece(s) in history? -->
-    <button
-      disabled={pieces.length < 1}
-      class="p-2 border rounded transition-colors {isHistoryMultiSelect
-        ? 'text-white border-white'
-        : ''}"
-      on:click={() => {
-        isHistoryMultiSelect = !isHistoryMultiSelect;
-        if (!isHistoryMultiSelect) {
-          selectedSheets = [];
-          HistoryCombineDialogComp.resetSettings();
-        }
-      }}
-    >
-      {isHistoryMultiSelect ? "Cancel Selection" : "Combine"}
-    </button>
     <hr class="w-[58em]" style="border: 1px solid #a0a0a0" />
 
     <div class="flex flex-col items-center gap-6">
@@ -1497,13 +1482,6 @@
           </p>
         {/if}
       </div>
-
-      <HistoryCombineDialog
-        appSettings={settings}
-        bind:combineSelection={selectedSheets}
-        bind:this={HistoryCombineDialogComp}
-        on:command={handleHistoryCombineCommand}
-      />
 
       <HistoryList
         {pieces}
@@ -1519,7 +1497,30 @@
         }}
         on:export={(e) => downloadSheetData(e.detail.project)}
       />
+
+      <HistoryCombineDialog
+        appSettings={settings}
+        bind:combineSelection={selectedSheets}
+        bind:this={HistoryCombineDialogComp}
+        on:command={handleHistoryCombineCommand}
+      />
     </div>
+
+    <button
+      disabled={pieces.length < 1}
+      class="!p-2 border rounded transition-colors {isHistoryMultiSelect
+        ? 'text-white border-white'
+        : ''}"
+      on:click={() => {
+        isHistoryMultiSelect = !isHistoryMultiSelect;
+        if (!isHistoryMultiSelect) {
+          selectedSheets = [];
+          HistoryCombineDialogComp.resetSettings();
+        }
+      }}
+    >
+      {isHistoryMultiSelect ? "Cancel selection" : "Combine multiple sheets"}
+    </button>
 
     <div>
       <StorageIndicator used={remaining} />
