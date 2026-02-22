@@ -399,7 +399,7 @@ export async function handleHistoryCombineCommand(e) {
     if (type === "image") {
       let downloadName = null;
       if (mode !== "copy") {
-        downloadName = prompt("Enter a filename:", ctx.getFilename());
+        downloadName = prompt("Enter a filename:", ctx.getFilename() || "");
         if (!downloadName || !downloadName.trim()) return; // User cancelled or left empty
       }
 

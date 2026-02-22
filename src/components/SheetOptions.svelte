@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from "svelte";
   import { vpScale } from "../utils/VP";
+  import { fonts, getDefaultSettings } from "../utils/Settings";
 
   let dispatch = createEventDispatcher();
 
@@ -8,17 +9,7 @@
   export let hasMIDI = false;
   export let hideTranspositionSettings = false;
 
-  let fonts = [
-    "Verdana",
-    "Tahoma",
-    "Dejavu Sans",
-    "Segoe UI",
-    "Helvetica",
-    "Lucida Console",
-    "Candara",
-  ];
-
-  export let settings = {};
+  export let settings = getDefaultSettings();
 </script>
 
 {#if show}

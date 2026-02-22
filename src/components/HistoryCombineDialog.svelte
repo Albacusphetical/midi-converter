@@ -1,15 +1,16 @@
 <script>
   import { createEventDispatcher, onMount } from "svelte";
   import SheetOptions from "./SheetOptions.svelte";
+  import { getDefaultSettings } from "../utils/Settings";
 
   const dispatch = createEventDispatcher();
 
   export let combineSelection = [];
-  export let appSettings = {};
+  export let appSettings = getDefaultSettings();
 
   let historyCombineDialog;
   let busy = false;
-  let tempSettings = {};
+  let tempSettings = getDefaultSettings();
   let progressPercent = 0;
   let progressDescription = "";
 
