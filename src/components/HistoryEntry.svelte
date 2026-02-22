@@ -35,7 +35,7 @@
 
   let processDecision = () => {
     if (removalDialog.returnValue == "export-and-delete") {
-      dispatch("export");
+      dispatch("export", { project: piece });
       history.delete(piece.name);
       dispatch("refresh");
     } else if (removalDialog.returnValue == "delete") {

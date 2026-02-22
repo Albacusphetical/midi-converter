@@ -908,6 +908,18 @@
   }
 
   function copyCapturedImage(blob) {
+    // Prevent browser crash (RESULT_CODE_KILLED_BAD_MESSAGE) for very large images
+    // Chromium for example has IPC limits for clipboard payload.
+    const MAX_COPY_SIZE = 8 * 1024 * 1024; // 8MB (should be ok?)
+    if (blob.size > MAX_COPY_SIZE) {
+      addToast(
+        `Image is too large to copy (${(blob.size / 1024 / 1024).toFixed(1)}MB). Downloading instead.`,
+        "warning",
+      );
+      downloadCapturedImage(blob, "large_sheet");
+      return;
+    }
+
     // note: ClipboardItem is not supported by mozilla
     try {
       navigator.clipboard.write([
@@ -1459,7 +1471,7 @@
   {#if pieces.length > 0}
     <!-- Has piece(s) in history? -->
     <button
-      disabled={pieces.length < 2}
+      disabled={pieces.length < 1}
       class="p-2 border rounded transition-colors {isHistoryMultiSelect
         ? 'text-white border-white'
         : ''}"
@@ -1719,7 +1731,7 @@
             {#if inner.type}
               {@const next_thing = chords_and_otherwise[+index + 1]}
               {@const previous_thing = chords_and_otherwise[+index - 1]}
-              {#if inner.type === "break" && next_thing.type != "comment" && previous_thing?.type != "comment"}
+              {#if inner.type === "break" && next_thing?.type != "comment" && previous_thing?.type != "comment"}
                 <br data-index={index} class="sheet-item" />
               {:else if inner.type === "comment"}
                 {#if index > 0 && previous_thing?.type != "comment" && inner.notop != true && inner.kind != "inline"}

@@ -10,6 +10,8 @@
   let historyCombineDialog;
   let busy = false;
   let tempSettings = {};
+  let progressPercent = 0;
+  let progressDescription = "";
 
   // Initialize tempSettings from appSettings if not yet set
   $: if (appSettings && Object.keys(tempSettings).length === 0) {
@@ -18,6 +20,15 @@
 
   export function setBusy(val) {
     busy = val;
+    if (!val) {
+      progressPercent = 0;
+      progressDescription = "";
+    }
+  }
+
+  export function setProgress(percent, description) {
+    progressPercent = Math.round(percent);
+    progressDescription = description || "";
   }
 
   export function resetSettings() {
@@ -142,18 +153,21 @@
     <div class="flex flex-col gap-2">
       <h3 class="font-semibold text-gray-300">Image</h3>
       <div class="flex gap-2">
-        <button
-          disabled={busy}
-          class="flex-1 p-2 bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          on:click={() =>
-            dispatch("command", {
-              type: "image",
-              mode: "copy",
-              tempSettings,
-            })}
-        >
-          Copy Image
-        </button>
+        {#if typeof ClipboardItem !== "undefined"}
+          <!-- note: in case it is not supported by mozilla -->
+          <button
+            disabled={busy}
+            class="flex-1 p-2 bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            on:click={() =>
+              dispatch("command", {
+                type: "image",
+                mode: "copy",
+                tempSettings,
+              })}
+          >
+            Copy Image
+          </button>
+        {/if}
         <button
           disabled={busy}
           class="flex-1 p-2 bg-blue-600 rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -189,6 +203,23 @@
         Copy Text
       </button>
     </div>
+
+    {#if busy}
+      <div class="flex flex-col gap-2 mt-2">
+        <div class="flex justify-between items-center text-sm">
+          <span class="text-gray-300"
+            >{progressDescription || "Starting..."}</span
+          >
+          <span class="text-gray-400 tabular-nums">{progressPercent}%</span>
+        </div>
+        <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div
+            class="h-full bg-blue-500 rounded-full"
+            style="width: {progressPercent}%"
+          ></div>
+        </div>
+      </div>
+    {/if}
 
     <button
       disabled={busy}

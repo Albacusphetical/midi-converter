@@ -2,6 +2,7 @@ import { getGlobalContext } from "./GlobalContext";
 import { domToBlob } from "modern-screenshot";
 import { decompress } from "./History";
 import { is_chord } from "../utils/VP";
+import { concatToBuffer } from "image-stitch/bundle";
 
 /**
  * Re-indexes transpose comments globally across one or more combined sheets and calculates relative differences.
@@ -10,7 +11,7 @@ export function reindexTransposes(data, globalIndex, lastTransposeValue) {
   let currentIndex = globalIndex;
   let currentLastValue = lastTransposeValue;
 
-  // Clone data to avoid mutating original source if cached (though decompress usually returns fresh)
+  // Clone data to avoid mutating original source
   let workingData = [...data];
 
   // Check if we need to inject an initial transpose comment
@@ -33,11 +34,7 @@ export function reindexTransposes(data, globalIndex, lastTransposeValue) {
           notop: true
         };
 
-        // Insert before the chord, or after title if close
-        // Simple heuristic: Insert at firstChordIndex is safe, or checking for Title
-        // Let's refine: Insert after last 'title' before firstChord?
-        // Actually, App.svelte just splices it in. 
-        // We will insert it immediately before the first chord to be safe.
+        // Insert before the first chord
         workingData.splice(firstChordIndex, 0, newComment);
       }
     }
@@ -45,24 +42,18 @@ export function reindexTransposes(data, globalIndex, lastTransposeValue) {
 
   const processedData = [];
 
-  // console.log("Reindexing transposes...", { globalIndex, lastTransposeValue, dataLength: workingData.length });
-
   for (const item of workingData) {
     if (item.kind === "transpose") {
-      // console.log("Found transpose item:", item.text);
       const match = item.text.match(/Transpose by:?\s*([+-]?\d+)/);
       if (match) {
         const val = parseInt(match[1]);
 
-        // Redundancy check: If the transpose value hasn't changed from the last known state,
-        // and we HAVE a last known state (i.e. not the very first sheet), skip it.
         if (currentLastValue !== undefined && val === currentLastValue) {
           continue;
         }
 
         let label = `Transpose by: ${val > 0 ? "+" : ""}${val}`;
 
-        // Add relative diff if we have a previous context
         if (currentLastValue !== undefined) {
           const diff = val - currentLastValue;
           label += ` (${diff > 0 ? "+" : ""}${diff})`;
@@ -75,8 +66,6 @@ export function reindexTransposes(data, globalIndex, lastTransposeValue) {
           text: `${label} #${currentIndex++}`,
         });
       } else {
-        // Fallback: Just re-index, ensuring space
-        // Try to strip existing index if present to avoid doubling
         let cleanText = item.text.replace(/ #\d+$/, "").trim();
         processedData.push({
           ...item,
@@ -139,18 +128,22 @@ function mergeConsecutiveBreaks(data) {
   return result;
 }
 
-
-
 /**
- * Iterates through sheets, loads them into the DOM via callback, and captures snapshots.
+ * Iterates through sheets, loads them into the DOM, and captures snapshots of the sheet in chunks.
+ * Uses image-stitch to combine PNGs directly, avoiding browser canvas size limits.
  */
 export async function generateCombinedImage({ selectedSheets, loadSheet, onProgress }) {
   let captures = [];
   let globalTransposeIndex = 1;
   let lastTransposeValue = undefined;
 
+  // Chunking and taking several images is safer and faster than taking a picture of a combined dom
+  const CHUNK_MAX_ITEMS = 6400; // magic/cool number that I found works well :shrug:
+  if (onProgress) onProgress(0, "Preparing sheets...");
+
+  // Phase 1: Prepare all sheets and prepare each sheet as chunks
+  const preparedSheets = [];
   for (let i = 0; i < selectedSheets.length; i++) {
-    if (onProgress) onProgress(i + 1, selectedSheets.length);
     const sheet = selectedSheets[i];
     let data = decompress(sheet.data);
 
@@ -172,65 +165,114 @@ export async function generateCombinedImage({ selectedSheets, loadSheet, onProgr
     // Strip leading/trailing breaks and merge consecutive ones
     const strippedData = mergeConsecutiveBreaks(reindexedData);
 
-    // Trigger UI load in parent
-    const target = await loadSheet(sheet.name, strippedData);
+    // Split the data into chunks before DOM loads
+    const chunks = [];
+    let currentChunk = [];
+    for (const item of strippedData) {
+      currentChunk.push(item);
+      if (item.type === "break" && currentChunk.length >= CHUNK_MAX_ITEMS) {
+        chunks.push(currentChunk);
+        currentChunk = [];
+      }
+    }
+    if (currentChunk.length > 0) chunks.push(currentChunk);
 
-    // Apply temporary generation settings (ordering, quantization) via softRegen
-    const ctx = getGlobalContext();
-    ctx.setForcedNextSheetStartTime(nextStart);
-    ctx.softRegen();
-
-    // Wait for Svelte to finish updating the DOM with the generation settings
-    await ctx.tick();
-
-    // Precise capture logic
-    target.style.height = "max-content";
-    target.style.width = "max-content";
-    target.style.whiteSpace = "nowrap";
-    void target.offsetHeight;
-
-    const rect = target.getBoundingClientRect();
-    const w = rect.width;
-    const padding = i === selectedSheets.length - 1 ? 15 : 0; // add some padding bottom of the final image
-    const h = rect.height + padding;
-
-    let options = {
-      scale: 2,
-      width: w,
-      height: h,
-      style: { backgroundColor: "#2D2A32" },
-    };
-
-    const blob = await domToBlob(target, options);
-    const bitmap = await createImageBitmap(blob);
-    captures.push(bitmap);
+    preparedSheets.push({ name: sheet.name, chunks, nextStart });
   }
 
-  // Final stitching
+  // Phase 2: Capture all chunks, tracking progress by total chunk count
+  const totalChunks = preparedSheets.reduce((sum, s) => sum + s.chunks.length, 0);
+  let completedChunks = 0;
+
+  for (let i = 0; i < preparedSheets.length; i++) {
+    const prep = preparedSheets[i];
+    const chunks = prep.chunks;
+
+    for (let c = 0; c < chunks.length; c++) {
+      const chunkData = chunks[c];
+
+      const target = await loadSheet(prep.name, chunkData);
+      const ctx = getGlobalContext();
+
+      if (c === chunks.length - 1) {
+        ctx.setForcedNextSheetStartTime(prep.nextStart);
+      } else {
+        ctx.setForcedNextSheetStartTime(undefined);
+      }
+
+      ctx.softRegen();
+      await ctx.tick();
+      await new Promise(r => setTimeout(r, 100));
+
+      target.style.height = "max-content";
+      target.style.width = "max-content";
+      target.style.whiteSpace = "nowrap";
+      void target.offsetHeight;
+
+      const rect = target.getBoundingClientRect();
+
+      const isLastOfAll = (i === preparedSheets.length - 1 && c === chunks.length - 1);
+      const padding = isLastOfAll ? 10 : 0;
+      const chunkH = rect.height + padding;
+
+      const options = {
+        scale: 2,
+        width: rect.width,
+        height: chunkH,
+        backgroundColor: "#2D2A32",
+        style: {
+          backgroundColor: "#2D2A32",
+          width: rect.width + "px"
+        },
+      };
+
+      try {
+        const blob = await domToBlob(target, options);
+        if (!blob) throw new Error("Captured chunk blob is null");
+        const buffer = await blob.arrayBuffer();
+        captures.push(new Uint8Array(buffer));
+      } catch (err) {
+        console.error(`Chunk capture failed at sheet ${i}, chunk ${c}:`, err);
+        throw err;
+      }
+
+      completedChunks++;
+      if (onProgress) {
+        const percent = (completedChunks / totalChunks) * 70; // Reserve last 30% for stitching
+        const chunkDetail = chunks.length > 1 ? ` (chunks ${c + 1}/${chunks.length})` : "";
+        onProgress(percent, `Capturing sheet ${i + 1} of ${selectedSheets.length}${chunkDetail}`);
+      }
+    }
+  }
+
+  // Final Stitching
   if (captures.length === 0) return null;
 
-  let totalWidth = 0;
-  let totalHeight = 0;
-  for (let img of captures) {
-    totalWidth = Math.max(totalWidth, img.width);
-    totalHeight += img.height;
+  try {
+    // image-stitch helps avoid canvas size limit, important for large combined sheets
+    const resultBuffer = await concatToBuffer({
+      inputs: captures,
+      layout: { columns: 1 },
+      outputFormat: 'png',
+      backgroundColor: '#2D2A32',
+      onProgress: (completed, total) => {
+        if (onProgress) {
+          const stitchPercent = 70 + (completed / total) * 30;
+          onProgress(stitchPercent, "Stitching images together...");
+        }
+      },
+    });
+
+    if (onProgress) onProgress(100, "Done!");
+
+    captures.length = 0;
+    preparedSheets.length = 0;
+
+    return new Blob([resultBuffer], { type: "image/png" });
+  } catch (err) {
+    console.error("Stitching failed:", err);
+    throw new Error(`Failed to stitch images: ${err.message}`);
   }
-
-  let canvas = document.createElement("canvas");
-  canvas.width = totalWidth;
-  canvas.height = totalHeight;
-  let ctx = canvas.getContext("2d");
-
-  ctx.fillStyle = "#2D2A32";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  let currentY = 0;
-  for (let img of captures) {
-    ctx.drawImage(img, 0, currentY);
-    currentY += img.height;
-  }
-
-  return new Promise((resolve) => canvas.toBlob(resolve));
 }
 
 /**
@@ -355,6 +397,12 @@ export async function handleHistoryCombineCommand(e) {
     }
 
     if (type === "image") {
+      let downloadName = null;
+      if (mode !== "copy") {
+        downloadName = prompt("Enter a filename:", ctx.getFilename());
+        if (!downloadName || !downloadName.trim()) return; // User cancelled or left empty
+      }
+
       ctx.addToast("Generating combined image...", "info");
       ctx.importer.hide();
       ctx.setIsHistoryMultiSelect(false);
@@ -366,17 +414,18 @@ export async function handleHistoryCombineCommand(e) {
         settings: ctx.getSettings(),
         loadSheet: (name, data) =>
           loadSheetForHistoryCombine(name, data),
-        onProgress: (current, total) => {
-          ctx.addToast(`Generating combined image (${current} / ${total})...`, "info");
+        onProgress: (percent, description) => {
+          ctx.HistoryCombineDialogComp.setProgress(percent, description);
         }
       });
 
       if (blob) {
-        if (mode === "copy") ctx.copyCapturedImage(blob);
-        else {
-          const name = prompt("Enter a filename:", ctx.getFilename());
-          if (name === null) return; // User cancelled
-          ctx.downloadCapturedImage(blob, name);
+        if (mode === "copy") {
+          // Note: copyCapturedImage in App.svelte already contains a safety size check (10MB)
+          // to prevent browser crashes (RESULT_CODE_KILLED_BAD_MESSAGE)
+          ctx.copyCapturedImage(blob);
+        } else {
+          ctx.downloadCapturedImage(blob, downloadName);
         }
       }
     } else if (type === "text") {
@@ -393,7 +442,8 @@ export async function handleHistoryCombineCommand(e) {
         loadSheet: (name, data, waitTime) =>
           loadSheetForHistoryCombine(name, data, waitTime),
         onProgress: (current, total) => {
-          ctx.addToast(`Generating combined text (${current} / ${total})...`, "info");
+          const percent = Math.round((current / total) * 100);
+          ctx.HistoryCombineDialogComp.setProgress(percent, `Processing sheet ${current} of ${total}...`);
         }
       });
 
