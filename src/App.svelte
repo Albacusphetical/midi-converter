@@ -1679,6 +1679,9 @@
       <SheetActions
         {settings}
         hasSelection={has_selection}
+        isAllNotesSelected={selection.left === 0 &&
+          selection.right ===
+            chords_and_otherwise[chords_and_otherwise.length - 1].index}
         on:captureSheetAsImage={(event) => {
           captureSheetAsImage(event.detail.mode, event.detail.selectionOnly);
         }}
