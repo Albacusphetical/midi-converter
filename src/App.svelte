@@ -1,4 +1,5 @@
 <script>
+  import { tick } from "svelte";
   import { domToBlob } from "modern-screenshot";
   import {
     getMIDIFileFromArrayBuffer,
@@ -52,6 +53,10 @@
   import SheetActions from "./components/SheetActions.svelte";
   import Guide from "./components/Guide.svelte";
   import ChordEditor from "./components/ChordEditor.svelte";
+  import HistoryCombineDialog from "./components/HistoryCombineDialog.svelte";
+  import HistoryList from "./components/HistoryList.svelte";
+  import { handleHistoryCombineCommand as handleHistoryCombineCommandUtils } from "./utils/HistoryCombine.js";
+  import { setGlobalContext } from "./utils/GlobalContext.js";
   import Toasts from "./components/Toasts.svelte";
   import StorageIndicator from "./components/StorageIndicator.svelte";
   import { addToast } from "./stores/ToastStore.js";
@@ -141,10 +146,52 @@
     }, 20);
   }
 
+  // --- Global Context Initialization ---
+  const context = {
+    get importer() {
+      return importer;
+    },
+    setIsHistoryMultiSelect: (v) => (isHistoryMultiSelect = v),
+    setSheetReady: (v) => (sheetReady = v),
+    getSettings: () => settings,
+    updateSettings: (updates) => (settings = { ...settings, ...updates }),
+    getSelectedSheets: () => selectedSheets,
+    setSelectedSheets: (v) => (selectedSheets = v),
+    get HistoryCombineDialogComp() {
+      return HistoryCombineDialogComp;
+    },
+    getContainer: () => container,
+    getChordsAndOtherwise: () => chords_and_otherwise,
+    setChordsAndOtherwise: (v) => (chords_and_otherwise = v),
+    getFilename: () => filename,
+    setFilename: (v) => (filename = v),
+    getSheetReady: () => sheetReady,
+    addToast,
+    softRegen,
+    tick,
+    setForcedNextSheetStartTime: (v) => (forcedNextSheetStartTime = v),
+    copyCapturedImage,
+    downloadCapturedImage,
+  };
+  setGlobalContext(context);
+  // -------------------------------------
+
   let MIDIObject;
   let tracks;
 
   let chords_and_otherwise;
+
+  let isHistoryMultiSelect = false;
+  let selectedSheets = [];
+  let forcedNextSheetStartTime = undefined;
+  let HistoryCombineDialogComp; // will be bound to HistoryCombineDialog component
+
+  /**
+   * Helper for the HistoryCombine utility to load a sheet and wait for layout.
+   */
+  async function handleHistoryCombineCommand(e) {
+    await handleHistoryCombineCommandUtils(e);
+  }
 
   let container;
 
@@ -293,10 +340,25 @@
           not_chord,
           real_index_of(chord.index + 1),
         );
-        if (!next_valid_chord) next_valid_chord = chord;
-        new_chord.next = {
-          notes: [{ playTime: next_valid_chord.notes[0].playTime }],
-        };
+
+        if (!next_valid_chord) {
+          if (forcedNextSheetStartTime !== undefined) {
+            // adjusts timing between for each combined sheet (except the last)
+            new_chord.next = {
+              notes: [{ playTime: forcedNextSheetStartTime }],
+            };
+          } else {
+            // original behavior
+            next_valid_chord = chord;
+            new_chord.next = {
+              notes: [{ playTime: next_valid_chord.notes[0].playTime }],
+            };
+          }
+        } else {
+          new_chord.next = {
+            notes: [{ playTime: next_valid_chord.notes[0].playTime }],
+          };
+        }
         if ("reflow" in chord) new_chord.reflow = chord.reflow;
 
         // new_note = new_note.sort((a, b) => a.displayValue - b.displayValue);
@@ -846,6 +908,18 @@
   }
 
   function copyCapturedImage(blob) {
+    // Prevent browser crash (RESULT_CODE_KILLED_BAD_MESSAGE) for very large images
+    // Chromium for example has IPC limits for clipboard payload.
+    const MAX_COPY_SIZE = 8 * 1024 * 1024; // 8MB (should be ok?)
+    if (blob.size > MAX_COPY_SIZE) {
+      addToast(
+        `Image is too large to copy (${(blob.size / 1024 / 1024).toFixed(1)}MB). Downloading instead.`,
+        "warning",
+      );
+      downloadCapturedImage(blob, "large_sheet");
+      return;
+    }
+
     // note: ClipboardItem is not supported by mozilla
     try {
       navigator.clipboard.write([
@@ -860,8 +934,8 @@
     }
   }
 
-  function downloadCapturedImage(blob) {
-    download(blob, "png");
+  function downloadCapturedImage(blob, name = undefined) {
+    download(blob, "png", name);
     addToast("Image downloaded!", "success");
   }
 
@@ -871,10 +945,10 @@
     download(blob, "json");
   }
 
-  function download(blob, extension) {
+  function download(blob, extension, name = undefined) {
     const url = URL.createObjectURL(blob);
 
-    let output = `${filename}.${extension}`;
+    let output = `${name ?? filename}.${extension}`;
 
     // create a temporary element to download the data
     let linkEl = document.createElement("a");
@@ -1130,19 +1204,45 @@
       }
     });
 
-    history.add(newName, settings, items).then(() => {
-      pieces = history.getAll((remaining = remainingSize()));
-      // Open in new tab
-      const url = new URL(window.location.href);
-      url.searchParams.set("open", newName);
+    history
+      .add(newName, settings, items, false, { noAutoDelete: true })
+      .then(() => {
+        pieces = history.getAll((remaining = remainingSize()));
+        // Open in new tab
+        const url = new URL(window.location.href);
+        url.searchParams.set("open", newName);
 
-      if (newWindow) {
-        newWindow.location.href = url.toString();
-      } else {
-        // Fallback if window failed to open (rare if triggered by click)
-        window.open(url.toString(), "_blank");
-      }
-    });
+        if (newWindow) {
+          newWindow.location.href = url.toString();
+        } else {
+          // Fallback if window failed to open (rare if triggered by click)
+          window.open(url.toString(), "_blank");
+        }
+      })
+      .catch((e) => {
+        if (newWindow) newWindow.close();
+
+        const errorMsg = e.message || "";
+        const isQuotaError =
+          e.name === "QuotaExceededError" ||
+          e.code === 22 ||
+          e.code === 1014 ||
+          errorMsg.includes("QuotaExceededError") ||
+          errorMsg.includes("The quota has been exceeded.") ||
+          errorMsg.includes("NS_ERROR_DOM_QUOTA_REACHED");
+
+        if (isQuotaError) {
+          if (
+            confirm("Storage is full, unable to save. Open in current window?")
+          ) {
+            filename = newName;
+            chords_and_otherwise = items;
+            softRegen();
+          }
+        } else {
+          addToast("Failed to split sheet: " + errorMsg, "error");
+        }
+      });
   }
 
   function joinRegion(left, right) {
@@ -1353,10 +1453,7 @@
       on:drop|preventDefault={droppedFile}
       on:dragover|preventDefault
       for="drop"
-      class="cursor-pointer
-                                 rounded-xl
-                                 text-xl
-                                 p-4"
+      class="cursor-pointer rounded-xl text-xl p-4"
       style="border: 2px solid dimgrey"
     >
       Click or drop a MIDI/JSON file here!
@@ -1376,32 +1473,54 @@
     <hr class="w-[58em]" style="border: 1px solid #a0a0a0" />
 
     <div class="flex flex-col items-center gap-6">
-      {#if pieces.length == 1 && pieces[0].name.endsWith("(sample)")}
-        <p class="text-white text-3xl">Or, try this sample piece:</p>
-      {:else}
-        <p class="text-white text-3xl">
-          Or, continue one of your previous projects:
-        </p>
-      {/if}
-      <div
-        class="w-3/4 flex flex-wrap justify-center gap-2 overflow-clip text-ellipsis"
-      >
-        {#each pieces as piece}
-          <HistoryEntry
-            {piece}
-            on:load={(x) => {
-              existingProject.setAndProceed(x.detail.project);
-              importer.hide();
-            }}
-            on:refresh={() => {
-              pieces = history.getAll();
-              remaining = remainingSize();
-            }}
-            on:export={() => downloadSheetData(piece)}
-          />
-        {/each}
+      <div class="flex flex-row gap-4 items-center">
+        {#if pieces.length == 1 && pieces[0].name.endsWith("(sample)")}
+          <p class="text-white text-3xl">Or, try this sample piece:</p>
+        {:else}
+          <p class="text-white text-3xl">
+            Or, continue one of your previous projects:
+          </p>
+        {/if}
       </div>
+
+      <HistoryList
+        {pieces}
+        selectable={isHistoryMultiSelect}
+        bind:selectedSheets
+        on:load={(e) => {
+          existingProject.setAndProceed(e.detail.project);
+          importer.hide();
+        }}
+        on:refresh={() => {
+          pieces = history.getAll();
+          remaining = remainingSize();
+        }}
+        on:export={(e) => downloadSheetData(e.detail.project)}
+      />
+
+      <HistoryCombineDialog
+        appSettings={settings}
+        bind:combineSelection={selectedSheets}
+        bind:this={HistoryCombineDialogComp}
+        on:command={handleHistoryCombineCommand}
+      />
     </div>
+
+    <button
+      disabled={pieces.length < 1}
+      class="!p-2 border rounded transition-colors {isHistoryMultiSelect
+        ? 'text-white border-white'
+        : ''}"
+      on:click={() => {
+        isHistoryMultiSelect = !isHistoryMultiSelect;
+        if (!isHistoryMultiSelect) {
+          selectedSheets = [];
+          HistoryCombineDialogComp.resetSettings();
+        }
+      }}
+    >
+      {isHistoryMultiSelect ? "Cancel selection" : "Combine multiple sheets"}
+    </button>
 
     <div>
       <StorageIndicator used={remaining} />
@@ -1560,6 +1679,9 @@
       <SheetActions
         {settings}
         hasSelection={has_selection}
+        isAllNotesSelected={selection.left === 0 &&
+          selection.right ===
+            chords_and_otherwise[chords_and_otherwise.length - 1].index}
         on:captureSheetAsImage={(event) => {
           captureSheetAsImage(event.detail.mode, event.detail.selectionOnly);
         }}
@@ -1613,10 +1735,10 @@
             {#if inner.type}
               {@const next_thing = chords_and_otherwise[+index + 1]}
               {@const previous_thing = chords_and_otherwise[+index - 1]}
-              {#if inner.type === "break" && next_thing.type != "comment" && previous_thing?.type != "comment"}
+              {#if inner.type === "break" && next_thing?.type != "comment" && previous_thing?.type != "comment"}
                 <br data-index={index} class="sheet-item" />
               {:else if inner.type === "comment"}
-                {#if previous_thing?.type != "comment" && inner.notop != true && inner.kind != "inline"}
+                {#if index > 0 && previous_thing?.type != "comment" && inner.notop != true && inner.kind != "inline"}
                   <br data-index={index} class="sheet-item" />
                 {/if}
                 {#if ["custom", "tempo", "inline", "title"].includes(inner.kind)}
@@ -1659,7 +1781,14 @@
                 {/if}
                 {#if inner.kind != "inline"}
                   <!-- and is any comment, break after -->
-                  <br data-index={index} class="sheet-item" />
+                  <br
+                    data-index={index}
+                    class="sheet-item"
+                    style={settings.capturingImage &&
+                    index === chords_and_otherwise.length - 1
+                      ? "display:none"
+                      : ""}
+                  />
                 {/if}
               {/if}
             {:else}

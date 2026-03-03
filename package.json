@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "date-fns": "^3.6.0",
+    "image-stitch": "^1.1.53",
     "midi-file": "^1.2.4",
     "midi-json-parser": "^8.1.18",
     "midi-parser-js": "^4.0.4",

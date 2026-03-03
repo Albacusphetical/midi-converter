@@ -1,0 +1,36 @@
+export const fonts = [
+  "Verdana",
+  "Tahoma",
+  "Dejavu Sans",
+  "Segoe UI",
+  "Helvetica",
+  "Lucida Console",
+  "Candara",
+];
+
+export const getDefaultSettings = () => ({
+  beats: 4,
+  breaks: "realistic",
+  quantize: 35,
+  classicChordOrder: false,
+  sequentialQuantize: true,
+  curlyQuantizes: true,
+  pShifts: "Start",
+  pOors: "Inorder",
+  oors: true,
+  tempoMarks: false,
+  oorMarks: false,
+  bpmChanges: true,
+  bpmType: "detailed",
+  minSpeedChange: 10,
+  oorSeparator: ":",
+  resilience: 2,
+  stickyAutoTransposition: false,
+  font: fonts[0],
+  lineHeight: 135,
+  capturingImage: false,
+  missingTempo: false,
+  bpm: 120,
+  tracks: [{}], // populated from main, default = all selected
+  ...JSON.parse(localStorage.getItem("preferences") || "{}"),
+});
