@@ -5,6 +5,7 @@
   export let settings;
 
   export let hasSelection = false;
+  export let isAllNotesSelected = false;
   let dispatch = createEventDispatcher();
 </script>
 
@@ -58,7 +59,11 @@
     {/if}
   </button>
   <button disabled={!hasSelection} on:click={() => dispatch("splitSheet")}>
-    Split Sheet
+    {#if isAllNotesSelected}
+      Duplicate Sheet
+    {:else}
+      Split Sheet
+    {/if}
     {#if hasSelection}
       <SelectionIcon />
     {/if}

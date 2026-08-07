@@ -1,47 +1,15 @@
 <script>
   import { createEventDispatcher } from "svelte";
   import { vpScale } from "../utils/VP";
+  import { fonts, getDefaultSettings } from "../utils/Settings";
 
   let dispatch = createEventDispatcher();
 
   export let show;
   export let hasMIDI = false;
+  export let hideTranspositionSettings = false;
 
-  let fonts = [
-    "Verdana",
-    "Tahoma",
-    "Dejavu Sans",
-    "Segoe UI",
-    "Helvetica",
-    "Lucida Console",
-    "Candara",
-  ];
-
-  export let settings = {
-    beats: 4,
-    breaks: "realistic",
-    quantize: 35,
-    classicChordOrder: false,
-    sequentialQuantize: true,
-    curlyQuantizes: true,
-    pShifts: "Start",
-    pOors: "Inorder",
-    oors: true,
-    tempoMarks: false,
-    oorMarks: false,
-    bpmChanges: true,
-    bpmType: "detailed",
-    minSpeedChange: 10,
-    oorSeparator: ":",
-    resilience: 2,
-    stickyAutoTransposition: false,
-    font: fonts[0],
-    lineHeight: 135,
-    capturingImage: false,
-    missingTempo: false,
-    bpm: 120,
-    tracks: [{}], // populated from main, default = all selected
-  };
+  export let settings = getDefaultSettings();
 </script>
 
 {#if show}
@@ -49,7 +17,7 @@
     <hr class="my-2 mx-1" />
 
     {#each settings.tracks as track, idx}
-      <label for="trackbox{idx + 1}">
+      <label for="trackbox{idx + 1}" class="track-label">
         <input
           id="trackbox{idx + 1}"
           type="checkbox"
@@ -60,52 +28,57 @@
             settings.tracks = settings.tracks.map((track) => ({ ...track }));
           }}
         />
-        Track {idx + 1} - {track.name}
-        {track.instrument ? `(${track.instrument}) ` : ""}- {track.length} events
+        <span>
+          Track {idx + 1} - {track.name}
+          {track.instrument ? `(${track.instrument}) ` : ""}- {track.length}
+          events
+        </span>
       </label>
     {/each}
   {/if}
 
-  <hr class="my-2 mx-1" />
+  {#if !hideTranspositionSettings}
+    <hr class="my-2 mx-1" />
 
-  <div
-    class="flex flex-col items-start align-middle"
-    style="margin-top: -0.7em"
-  >
-    <div class="flex flex-row mt-3">
-      <label
-        class="flex flex-row items-center"
-        title="Defines how much better a transposition should be than the previous transposition for multi-transpose to act (higher = less transposing)"
-        for="atleast">Resilience (?):</label
-      >
-      <input
-        class="w-32"
-        id="atleast"
-        type="range"
-        min="0"
-        max="12"
-        bind:value={settings.resilience}
-      />
-      <span style="display:flex; align-items: center"
-        >{settings.resilience}</span
-      >
+    <div
+      class="flex flex-col items-start align-middle"
+      style="margin-top: -0.7em"
+    >
+      <div class="flex flex-row mt-3">
+        <label
+          class="flex flex-row items-center"
+          title="Defines how much better a transposition should be than the previous transposition for multi-transpose to act (higher = less transposing)"
+          for="atleast">Resilience (?):</label
+        >
+        <input
+          class="w-32"
+          id="atleast"
+          type="range"
+          min="0"
+          max="12"
+          bind:value={settings.resilience}
+        />
+        <span style="display:flex; align-items: center"
+          >{settings.resilience}</span
+        >
+      </div>
+      <div class="flex flex-row mt-3">
+        <label
+          class="flex flex-row items-center"
+          title="Defines whether or not the transposed region(s) should be related to previous regions"
+          for="sticky-auto-transposition">Sticky auto-transposition (?):</label
+        >
+        <input
+          class="mx-1"
+          type="checkbox"
+          id="sticky-auto-transposition"
+          bind:checked={settings.stickyAutoTransposition}
+        />
+      </div>
     </div>
-    <div class="flex flex-row mt-3">
-      <label
-        class="flex flex-row items-center"
-        title="Defines whether or not the transposed region(s) should be related to previous regions"
-        for="sticky-auto-transposition">Sticky auto-transposition (?):</label
-      >
-      <input
-        class="mx-1"
-        type="checkbox"
-        id="sticky-auto-transposition"
-        bind:checked={settings.stickyAutoTransposition}
-      />
-    </div>
-  </div>
 
-  <hr class="my-2 mx-1" />
+    <hr class="my-2 mx-1" />
+  {/if}
 
   <div>
     <!-- {#if hasMIDI} -->
@@ -219,7 +192,7 @@
       </div>
     {/if}
 
-    <label for="classic-chord-order">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="classic-chord-order"
@@ -228,7 +201,7 @@
       Classic chord order
     </label>
 
-    <label for="order-quantizes">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="order-quantizes"
@@ -242,7 +215,7 @@
       </span>
     </label>
 
-    <label for="curly-quantizes">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="curly-quantizes"
@@ -251,14 +224,14 @@
       Curly braces for quantized chords
     </label>
 
-    <label for="out-of-range">
+    <label class="checkbox-label">
       <input type="checkbox" id="out-of-range" bind:checked={settings.oors} />
       Include out of range (ctrl) notes
     </label>
 
     <hr class="my-2 mx-1" />
 
-    <label for="tempo-checkbox">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="tempo-checkbox"
@@ -267,7 +240,7 @@
       Show tempo/timing marks
     </label>
 
-    <label for="oormark-checkbox">
+    <label class="checkbox-label">
       <input
         type="checkbox"
         id="oormark-checkbox"
@@ -322,7 +295,7 @@
     <hr class="my-2 mx-1" />
 
     {#if hasMIDI && !settings.missingTempo}
-      <label for="bpm-changes">
+      <label for="bpm-changes" class="checkbox-label">
         <input
           type="checkbox"
           id="bpm-changes"
@@ -396,6 +369,20 @@
     label {
       max-width: fit-content;
       text-align: center;
+      user-select: none;
+    }
+
+    label:hover {
+      color: lightgray;
+    }
+
+    .track-label,
+    .checkbox-label {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.4em;
+      margin-bottom: 0.2em;
     }
 
     .select-div {
