@@ -4,6 +4,9 @@ import { decompress } from "./History";
 import { is_chord } from "../utils/VP";
 import { concatToBuffer } from "image-stitch/bundle";
 
+
+export const CHUNK_MAX_ITEMS = 6400;
+
 /**
  * Re-indexes transpose comments globally across one or more combined sheets and calculates relative differences.
  */
@@ -129,11 +132,107 @@ function mergeConsecutiveBreaks(data) {
 }
 
 /**
+ * Splits sheet data into chunks of maximum size, ending each chunk at a break.
+ */
+export function chunkSheetData(data, chunkMaxItems = CHUNK_MAX_ITEMS) {
+  const chunks = [];
+  let currentChunk = [];
+  for (const item of data) {
+    currentChunk.push(item);
+    if (item.type === "break" && currentChunk.length >= chunkMaxItems) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+    }
+  }
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+  return chunks;
+}
+
+/**
+ * Helper to capture multiple chunks and stitch them together using image-stitch.
+ */
+export async function captureChunksAndStitch({ flatChunks, loadSheet, onProgress, onCloneNode }) {
+  let captures = [];
+  const totalChunks = flatChunks.length;
+
+  for (let idx = 0; idx < totalChunks; idx++) {
+    const chunk = flatChunks[idx];
+    const target = await loadSheet(chunk.name, chunk.chunkData);
+    const ctx = getGlobalContext();
+
+    ctx.setForcedNextSheetStartTime(chunk.nextStart);
+    ctx.softRegen();
+    await ctx.tick();
+    await new Promise(r => setTimeout(r, 100));
+
+    target.style.height = "max-content";
+    target.style.width = "max-content";
+    target.style.whiteSpace = "nowrap";
+    void target.offsetHeight;
+
+    const rect = target.getBoundingClientRect();
+    const padding = chunk.isLastOfAll ? 10 : 0;
+    const chunkH = rect.height + padding;
+
+    const options = {
+      scale: 2,
+      width: rect.width,
+      height: chunkH,
+      backgroundColor: "#2D2A32",
+      style: {
+        backgroundColor: "#2D2A32",
+        width: rect.width + "px"
+      },
+      onCloneNode,
+    };
+
+    try {
+      const blob = await domToBlob(target, options);
+      if (!blob) throw new Error("Captured chunk blob is null");
+      const buffer = await blob.arrayBuffer();
+      captures.push(new Uint8Array(buffer));
+    } catch (err) {
+      console.error(`Chunk capture failed at chunk ${idx}:`, err);
+      throw err;
+    }
+
+    if (onProgress) {
+      const percent = ((idx + 1) / totalChunks) * 70;
+      onProgress(percent, chunk.progressLabel || `Capturing chunk ${idx + 1} of ${totalChunks}`);
+    }
+  }
+
+  if (captures.length === 0) return null;
+
+  try {
+    const resultBuffer = await concatToBuffer({
+      inputs: captures,
+      layout: { columns: 1 },
+      outputFormat: 'png',
+      backgroundColor: '#2D2A32',
+      onProgress: (completed, total) => {
+        if (onProgress) {
+          const stitchPercent = 70 + (completed / total) * 30;
+          onProgress(stitchPercent, "Stitching images together...");
+        }
+      },
+    });
+
+    if (onProgress) onProgress(100, "Done!");
+
+    captures.length = 0;
+    return new Blob([resultBuffer], { type: "image/png" });
+  } catch (err) {
+    console.error("Stitching failed:", err);
+    throw new Error(`Failed to stitch images: ${err.message}`);
+  }
+}
+
+/**
  * Iterates through sheets, loads them into the DOM, and captures snapshots of the sheet in chunks.
  * Uses image-stitch to combine PNGs directly, avoiding browser canvas size limits.
  */
 export async function generateCombinedImage({ selectedSheets, loadSheet, onProgress }) {
-  let captures = [];
   let globalTransposeIndex = 1;
   let lastTransposeValue = undefined;
 
@@ -180,99 +279,29 @@ export async function generateCombinedImage({ selectedSheets, loadSheet, onProgr
     preparedSheets.push({ name: sheet.name, chunks, nextStart });
   }
 
-  // Phase 2: Capture all chunks, tracking progress by total chunk count
-  const totalChunks = preparedSheets.reduce((sum, s) => sum + s.chunks.length, 0);
-  let completedChunks = 0;
-
+  // Flatten the prepared chunks
+  const flatChunks = [];
   for (let i = 0; i < preparedSheets.length; i++) {
     const prep = preparedSheets[i];
-    const chunks = prep.chunks;
-
-    for (let c = 0; c < chunks.length; c++) {
-      const chunkData = chunks[c];
-
-      const target = await loadSheet(prep.name, chunkData);
-      const ctx = getGlobalContext();
-
-      if (c === chunks.length - 1) {
-        ctx.setForcedNextSheetStartTime(prep.nextStart);
-      } else {
-        ctx.setForcedNextSheetStartTime(undefined);
-      }
-
-      ctx.softRegen();
-      await ctx.tick();
-      await new Promise(r => setTimeout(r, 100));
-
-      target.style.height = "max-content";
-      target.style.width = "max-content";
-      target.style.whiteSpace = "nowrap";
-      void target.offsetHeight;
-
-      const rect = target.getBoundingClientRect();
-
-      const isLastOfAll = (i === preparedSheets.length - 1 && c === chunks.length - 1);
-      const padding = isLastOfAll ? 10 : 0;
-      const chunkH = rect.height + padding;
-
-      const options = {
-        scale: 2,
-        width: rect.width,
-        height: chunkH,
-        backgroundColor: "#2D2A32",
-        style: {
-          backgroundColor: "#2D2A32",
-          width: rect.width + "px"
-        },
-      };
-
-      try {
-        const blob = await domToBlob(target, options);
-        if (!blob) throw new Error("Captured chunk blob is null");
-        const buffer = await blob.arrayBuffer();
-        captures.push(new Uint8Array(buffer));
-      } catch (err) {
-        console.error(`Chunk capture failed at sheet ${i}, chunk ${c}:`, err);
-        throw err;
-      }
-
-      completedChunks++;
-      if (onProgress) {
-        const percent = (completedChunks / totalChunks) * 70; // Reserve last 30% for stitching
-        const chunkDetail = chunks.length > 1 ? ` (chunks ${c + 1}/${chunks.length})` : "";
-        onProgress(percent, `Capturing sheet ${i + 1} of ${selectedSheets.length}${chunkDetail}`);
-      }
+    for (let c = 0; c < prep.chunks.length; c++) {
+      flatChunks.push({
+        name: prep.name,
+        chunkData: prep.chunks[c],
+        nextStart: c === prep.chunks.length - 1 ? prep.nextStart : undefined,
+        isLastOfAll: i === preparedSheets.length - 1 && c === prep.chunks.length - 1,
+        progressLabel: `Capturing sheet ${i + 1} of ${selectedSheets.length}${prep.chunks.length > 1 ? ` (chunks ${c + 1}/${prep.chunks.length})` : ""}`
+      });
     }
   }
 
-  // Final Stitching
-  if (captures.length === 0) return null;
+  const resultBlob = await captureChunksAndStitch({
+    flatChunks,
+    loadSheet,
+    onProgress,
+  });
 
-  try {
-    // image-stitch helps avoid canvas size limit, important for large combined sheets
-    const resultBuffer = await concatToBuffer({
-      inputs: captures,
-      layout: { columns: 1 },
-      outputFormat: 'png',
-      backgroundColor: '#2D2A32',
-      onProgress: (completed, total) => {
-        if (onProgress) {
-          const stitchPercent = 70 + (completed / total) * 30;
-          onProgress(stitchPercent, "Stitching images together...");
-        }
-      },
-    });
-
-    if (onProgress) onProgress(100, "Done!");
-
-    captures.length = 0;
-    preparedSheets.length = 0;
-
-    return new Blob([resultBuffer], { type: "image/png" });
-  } catch (err) {
-    console.error("Stitching failed:", err);
-    throw new Error(`Failed to stitch images: ${err.message}`);
-  }
+  preparedSheets.length = 0;
+  return resultBlob;
 }
 
 /**
@@ -377,7 +406,21 @@ export async function loadSheetForHistoryCombine(
   ctx.setChordsAndOtherwise(data);
   ctx.setFilename(name);
   await new Promise((r) => setTimeout(r, waitTime));
-  return ctx.getContainer().querySelector("div");
+
+  // Wait for the container DOM element to exist (sheetReady may have just been set)
+  let container = ctx.getContainer();
+  let attempts = 0;
+  while (!container && attempts < 20) {
+    await new Promise((r) => setTimeout(r, 100));
+    container = ctx.getContainer();
+    attempts++;
+  }
+
+  if (!container) {
+    throw new Error("Sheet container not available");
+  }
+
+  return container.querySelector("div");
 }
 
 export async function handleHistoryCombineCommand(e) {

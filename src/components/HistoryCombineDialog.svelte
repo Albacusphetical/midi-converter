@@ -211,7 +211,7 @@
     </div>
 
     {#if busy}
-      <div class="flex flex-col gap-2 mt-2">
+      <div class="flex flex-col gap-2 mt-2 backdrop-blur-sm z">
         <div class="flex justify-between items-center text-sm">
           <span class="text-gray-300"
             >{progressDescription || "Starting..."}</span
