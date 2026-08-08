@@ -55,6 +55,7 @@
   import ChordEditor from "./components/ChordEditor.svelte";
   import HistoryCombineDialog from "./components/HistoryCombineDialog.svelte";
   import HistoryList from "./components/HistoryList.svelte";
+  import ProgressBar from "./components/ProgressBar.svelte";
   import {
     handleHistoryCombineCommand as handleHistoryCombineCommandUtils,
     captureChunksAndStitch,
@@ -1684,20 +1685,7 @@
       class="bg-[#242424] border border-neutral-600 rounded-lg p-6 w-[350px] flex flex-col gap-4 text-white shadow-2xl"
     >
       <h3 class="font-bold text-lg text-center">Capturing Sheet Image</h3>
-      <div class="flex flex-col gap-2">
-        <div class="flex justify-between items-center text-sm">
-          <span class="text-gray-300"
-            >{captureDescription || "Starting..."}</span
-          >
-          <span class="text-gray-400 tabular-nums">{capturePercent}%</span>
-        </div>
-        <div class="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div
-            class="h-full bg-blue-500 rounded-full"
-            style="width: {capturePercent}%"
-          ></div>
-        </div>
-      </div>
+      <ProgressBar percent={capturePercent} description={captureDescription} />
     </div>
   </div>
 {/if}
