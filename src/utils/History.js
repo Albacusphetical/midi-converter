@@ -1,5 +1,6 @@
 import pako from "pako";
 import { addToast } from "../stores/ToastStore.js";
+import { showQuotaError, clearQuotaError } from "../stores/QuotaStore.js";
 
 const _key = "pieces";
 
@@ -53,6 +54,7 @@ const module = {
 
     try {
       localStorage.setItem(_key, JSON.stringify(thisPieceRemoved));
+      clearQuotaError();
       addToast("Saved!", "success");
     } catch (e) {
       const errorMsg = e.message || "";
@@ -67,6 +69,7 @@ const module = {
       console.error(e);
       if (isQuotaError) {
         addToast("Storage quota exceeded! Sheet could not be saved. Please open a new tab and export/delete other sheets!", "error");
+        showQuotaError({ name });
       } else {
         addToast("Failed to save sheet due to storage error!", "error");
       }

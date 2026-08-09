@@ -61,12 +61,13 @@
     captureChunksAndStitch,
     loadSheetForHistoryCombine,
     chunkSheetData,
-    CHUNK_MAX_ITEMS,
+    calculateChunkMaxItems,
   } from "./utils/SheetCombine.js";
   import { setGlobalContext } from "./utils/GlobalContext.js";
   import Toasts from "./components/Toasts.svelte";
   import StorageIndicator from "./components/StorageIndicator.svelte";
   import { addToast } from "./stores/ToastStore.js";
+  import { showQuotaError } from "./stores/QuotaStore.js";
 
   let existingProject = {
     element: undefined,
@@ -836,7 +837,10 @@
       targetData = chords_and_otherwise || [];
     }
 
-    const chunks = chunkSheetData(targetData, CHUNK_MAX_ITEMS);
+    const chunks = chunkSheetData(
+      targetData,
+      calculateChunkMaxItems(targetData, settings),
+    );
 
     // If large sheet requiring stitching (> 1 chunk), use image-stitch pipeline with progress tracking
     if (chunks.length > 1) {
@@ -1381,13 +1385,7 @@
           errorMsg.includes("NS_ERROR_DOM_QUOTA_REACHED");
 
         if (isQuotaError) {
-          if (
-            confirm("Storage is full, unable to save. Open in current window?")
-          ) {
-            filename = newName;
-            chords_and_otherwise = items;
-            softRegen();
-          }
+          showQuotaError({ name: newName });
         } else {
           addToast("Failed to split sheet: " + errorMsg, "error");
         }
@@ -1672,7 +1670,7 @@
     </button>
 
     <div>
-      <StorageIndicator used={remaining} />
+      <StorageIndicator used={remaining} showQuotaButton={false} />
     </div>
   {/if}
 </div>

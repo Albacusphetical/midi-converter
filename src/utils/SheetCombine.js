@@ -8,6 +8,67 @@ import { concatToBuffer } from "image-stitch/bundle";
 export const CHUNK_MAX_ITEMS = 6400;
 
 /**
+ * Target rendered height (in px) for each captured chunk.
+ * Keeps each DOM capture comfortably below browser element/canvas limits.
+ */
+const TARGET_CHUNK_HEIGHT = 9000;
+
+/**
+ * Absolute lower bound for a chunk, regardless of how tall a sheet renders.
+ */
+const MIN_CHUNK_MAX_ITEMS = 500;
+
+/**
+ * Base font size (10pt from global.css) used to estimate line height.
+ */
+const BASE_FONT_SIZE = 13.33;
+
+/**
+ * Estimates how many rendered lines a sheet item produces.
+ * Chords share a line between breaks/comments, so only breaks and comments add lines.
+ */
+function estimateLinesForItem(item) {
+  if (!item) return 0;
+  if (item.type === "break") return 1;
+  if (item.type === "comment") {
+    // Each comment is wrapped in <br>s and long comments wrap over multiple lines
+    const wrappedLines = Math.max(0, Math.ceil((item.text?.length ?? 1) / 60) - 1);
+    return 2 + wrappedLines;
+  }
+  return 0;
+}
+
+/**
+ * Dynamically calculates a chunk size for a specific sheet so that each chunk
+ * stays under a target rendered height, based on the sheet's estimated layout.
+ *
+ * @param {Array} data - The sheet items to be chunked.
+ * @param {Object} [settings] - App settings (used for font/line-height).
+ * @returns {number} The number of items each chunk should target.
+ */
+export function calculateChunkMaxItems(data, settings = {}) {
+  if (!Array.isArray(data) || data.length === 0) return CHUNK_MAX_ITEMS;
+
+  const fontSize = settings.fontSize ?? BASE_FONT_SIZE;
+  const lineHeightPx = (fontSize * (settings.lineHeight ?? 135)) / 100;
+
+  let lines = 1;
+  for (const item of data) {
+    lines += estimateLinesForItem(item);
+  }
+  lines = Math.max(1, lines);
+
+  const totalHeight = lines * lineHeightPx;
+  if (totalHeight <= 0) return CHUNK_MAX_ITEMS;
+
+  // Fraction of the sheet that fits inside the target chunk height
+  const chunkFraction = Math.min(1, TARGET_CHUNK_HEIGHT / totalHeight);
+  const computed = Math.round(data.length * chunkFraction);
+
+  return Math.max(MIN_CHUNK_MAX_ITEMS, Math.min(CHUNK_MAX_ITEMS, computed));
+}
+
+/**
  * Re-indexes transpose comments globally across one or more combined sheets and calculates relative differences.
  */
 export function reindexTransposes(data, globalIndex, lastTransposeValue) {
@@ -237,7 +298,6 @@ export async function generateCombinedImage({ selectedSheets, loadSheet, onProgr
   let lastTransposeValue = undefined;
 
   // Chunking and taking several images is safer and faster than taking a picture of a combined dom
-  const CHUNK_MAX_ITEMS = 6400; // magic/cool number that I found works well :shrug:
   if (onProgress) onProgress(0, "Preparing sheets...");
 
   // Phase 1: Prepare all sheets and prepare each sheet as chunks
@@ -264,12 +324,15 @@ export async function generateCombinedImage({ selectedSheets, loadSheet, onProgr
     // Strip leading/trailing breaks and merge consecutive ones
     const strippedData = mergeConsecutiveBreaks(reindexedData);
 
+    // Dynamic chunk size so each chunk stays under the target rendered height
+    const chunkMaxItems = calculateChunkMaxItems(strippedData);
+
     // Split the data into chunks before DOM loads
     const chunks = [];
     let currentChunk = [];
     for (const item of strippedData) {
       currentChunk.push(item);
-      if (item.type === "break" && currentChunk.length >= CHUNK_MAX_ITEMS) {
+      if (item.type === "break" && currentChunk.length >= chunkMaxItems) {
         chunks.push(currentChunk);
         currentChunk = [];
       }
