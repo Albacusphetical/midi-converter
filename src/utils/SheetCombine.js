@@ -16,7 +16,7 @@ const TARGET_CHUNK_HEIGHT = 9000;
 /**
  * Absolute lower bound for a chunk, regardless of how tall a sheet renders.
  */
-const MIN_CHUNK_MAX_ITEMS = 500;
+const MIN_CHUNK_MAX_ITEMS = 3200;
 
 /**
  * Base font size (10pt from global.css) used to estimate line height.
